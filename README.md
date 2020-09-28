@@ -8,4 +8,4 @@ The markdown file makes it easy to reproduce all of the calculations in the pape
 
 ## How to use Vaccine-Efficacy
 
-View the sample code in sim_fig_replication_0928.rmd to see how to use Vaccine-Efficacy. This markdown file contains all of the code and includes description for how to use each part. When knited, this markdown file will produce a HTML file.
+View the code in sim_fig_replication_0928.rmd to see how to use Vaccine-Efficacy. This markdown file contains all of the code and includes description for what is happening in each part. Running each section in order will produce the desired simulations. When knited, this markdown file will produce a HTML file.
