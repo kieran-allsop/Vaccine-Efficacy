@@ -1,0 +1,411 @@
+---
+title: 'Awaiting the signal: Assessing the efficacy of COVID-19 vaccines - Figures
+  and simulations'
+author: "James C. Capretta and Scott Ganz"
+date: "September 2020"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+library(dplyr)
+library(readr)
+library(ggplot2)
+library(tidyr)
+library(ggthemes)
+library(stringr)
+library(metR)
+options(warn = -1)
+
+set.seed(123456)
+```
+
+## Introduction
+
+This replication file replicates the calculations in the paper **Awaiting the signal: Assessing the efficacy of COVID-19 vaccines**. The code was originally run on R.4.0.1. Updated versions of R may have been released since this replication file was written.
+
+You will need to install the following packages into R to run this code:
+
+* dplyr
+* readr
+* ggplot2
+* tidyr
+* ggthemes
+* stringr
+* metR
+
+## Simulation parameters
+
+First, define the four key factors for efficacy signals:
+<ol type="1">
+  <li>**Sample Size (ss):** The number of participants taking part in a vaccine trial.</li>
+  <li>**Number of Primary Endpoints (n):** The number of observed cases prior to analyzing trial results.</li>
+  <li>**Attack Rate (ar):** The frequency with which non-vaccinated individuals contract the virus.</li>
+  <li>**True Vaccine Efficacy Rate (ve):** The true extent to which the vaccine reduces the probability of contracting COVID-19.</li>
+</ol>
+
+## False positive analysis
+
+"Even if the vaccine had no effect whatsoever, a Phase III trial that concluded after 30 cases would produce an observed efficacy rate of at least 50 percent approximately 5 percent of the time due to random chance."  
+
+* True vaccine efficacy rate *ve* is 0.
+* Number of endpoints *n* is 30.
+* Observed vaccine efficacy rate *ve_hat* is 0.5. 
+  
+```{r falsepositive1}
+ve <- 0
+rr <- 1 - ve
+n <- 30
+ve_hat <- 0.5
+rr_hat <- 1 - ve_hat
+pbinom(rr_hat/(1 + rr_hat) * n, n, rr/(1 + rr))
+```
+
+"After 300 observed cases, in contrast, the probability of observing a 50 percent efficacy rate if the vaccine had no effect is vanishingly small."  
+
+* True vaccine efficacy rate *ve* is 0.
+* Number of endpoints *n* is 300.
+* Observed vaccine efficacy rate *ve_hat* is 0.5. 
+
+```{r falsepositive2}
+n <- 300
+pbinom(rr_hat/(1 + rr_hat) * n, n, rr/(1 + rr))
+```
+
+## Required vaccine efficacy rate to satisfy criteria
+
+"With an observed vaccine efficacy rate of at least 50 percent after 150 cases across both arms, the results of the trial imply that the true efficacy rate indeed falls above 30 percent more than 97.5 times out of 100."
+
+* Number of endpoints *n* is 150
+* Observed vaccine efficacy rate *ve_hat* is 0.5.
+
+```{r CIforObservedVEs1}
+ve_hat <- 0.5
+rr_hat <- 1 - ve_hat
+n <- 150
+x <- qbinom(0.975, n, rr_hat/(1 + rr_hat))
+ve_025 <- 1 - x/(n - x)
+ve_025 > 0.3
+```
+
+"If, for example, the trial concluded after 75 confirmed cases, an observed vaccine efficacy rate of 57 percent would be necessary to ensure that the true efficacy rate is over 30 percent with 97.5 percent confidence."
+
+* Number of endpoints *n* is 75.
+* Potential observed vaccine efficacy rates *ve_hat0* range from 0.01 to 0.99.
+
+```{r CIforObservedVEs2}
+ve_hat0 <- 1:99/100
+rr0 <- 1 - ve_hat0
+n <- 75
+q <- qbinom(0.975, n, rr0/(1 + rr0))
+ve_025 <- 1 - q/(n - q)
+ve_star75 <- min(ve_hat0[ve_025 > 0.3])
+ve_star75
+```
+
+"If a candidate vaccine has an observed efficacy of 70 percent and the trial concludes after 50 cases, we would have 97.5 percent confidence that the true efficacy rate exceeds 44 percent."
+
+* Number of endpoints *n* is 50.
+* Observed vaccine efficacy rate *ve_hat* is 0.7.
+
+```{r CIforObservedVEs3.1}
+ve_hat <- 0.7
+rr_hat <- 1 - ve_hat
+n <- 50
+x <- qbinom(0.975, n, rr_hat/(1 + rr_hat))
+ve_025 <- 1 - x/(n - x)
+ve_025 > 0.3
+```
+
+"If a vaccine has an observed efficacy rate of 60 percent, 50 cases would not be enough, although 100 cases would be."
+
+* Number of endpoints *n* is 50 or 100.
+* Observed vaccine efficacy rate *ve_hat* is 0.6.
+
+```{r CIforObservedVEs3.2}
+ve_hat <- 0.6
+rr_hat <- 1 - ve_hat
+n <- 50
+x <- qbinom(0.975, n, rr_hat/(1 + rr_hat))
+ve_025 <- 1 - x/(n - x)
+ve_025 > 0.3
+
+ve_hat <- 0.6
+rr_hat <- 1 - ve_hat
+n <- 100
+x <- qbinom(0.975, n, rr_hat/(1 + rr_hat))
+ve_025 <- 1 - x/(n - x)
+ve_025 > 0.3
+```
+
+## Reproducing Table 3
+
+* Number of endpoints *n* is 50, 100, 150, or 300.
+* Observed vaccine efficacy rate *ve_hat* is 0.4, 0.5, 0.6, or 0.7.
+* 95% confidence interval.
+
+```{r Table3}
+# Set values of n and ve_hat
+n <- c(50, 100, 150, 300)
+ve_hat <- c(0.4, 0.5, 0.6, 0.7)
+
+d <- expand.grid(n = n, ve_hat = ve_hat) %>% 
+  as_tibble %>%
+  mutate(lwr = NA,
+         upr = NA)
+
+for (i in 1:dim(d)[1]) {
+  ve_hat <- d$ve_hat[i]
+  rr_hat <- 1 - ve_hat
+  n <- d$n[i]
+  q1 <- qbinom(0.975, n, rr_hat/(1 + rr_hat))
+  d$lwr[i] <- 1 - q1/(n - q1)
+  q2 <- qbinom(0.025, n, rr_hat/(1 + rr_hat))
+  d$upr[i] <- 1 - q2/(n - q2)
+}
+d
+```
+
+## Estimated Wait Times
+
+"Assuming a 30,000-person trial and three-month attack rate of 1 percent for the placebo arm, a trial for a vaccine with a 50 percent efficacy rate that requires 150 positive cases has a one in two chance of ending before two and a half months and more than a 99 percent chance of ending before three months."
+
+* 3-month Attack rate *ar* is 0.01.
+* Sample size *ss* is 30000.
+* Number of endpoints *n* is 150.
+* True vaccine efficacy rate *ve* is 0.5.
+* Number of bootstrap samples is $10^5$.
+
+```{r WaitTime1}
+sim_waiting_time = function(ss, ar, n, ve, nsim) {
+  (sapply(1:nsim, function(x) {
+    X <- sort(c(rexp(ss/2, ar/3), rexp(ss/2, (ar/3) * (1 - ve))))
+    X[X > 0.5][n]
+  }))
+}
+
+x <- sim_waiting_time(30000, 0.01, 150, 0.5, 10^5)
+mean(x < 2.5)
+mean(x < 3)
+
+```
+
+"By comparison, the trial would observe 100 cases before two and a half months with near certainty."
+
+* 3-mo Attack rate *ar* is 0.01.
+* Sample size *ss* is 30000.
+* Number of endpoints *n* is 100.
+* True vaccine efficacy rate *ve* is 0.5.
+* Number of bootstrap samples is $10^5$.
+
+```{r WaitTime2}
+x <- sim_waiting_time(30000, 0.01, 100, 0.5, 10^5)
+mean(x < 2.5)
+```
+
+"Increasing the number of participants in the previous example by 50 percent would mean that the trial would reach 150 positive cases before two months more than 90 percent of the time."
+
+* 3-mo Attack rate *ar* is 0.01.
+* Sample size *ss* is 45000
+* Number of endpoints *n* is 150.
+* True vaccine efficacy rate *ve* is 0.5.
+* Number of bootstrap samples is $10^5$.
+
+```{r WaitTime3}
+x <- sim_waiting_time(30000 * 1.5, 0.01, 150, 0.5, 10^5)
+mean(x < 2)
+```
+
+"In a 30,000-participant trial for a vaccine with a 60 percent efficacy rate, the probability of reaching 150 positive cases before two and a half months drops to one in five. If the same trial were evaluating a vaccine with a 70 percent efficacy rate, that probability falls to less than one in 20."
+
+* 3-mo Attack rate *ar* is 0.01.
+* Sample size *ss* is 30000
+* Number of endpoints *n* is 150.
+* True vaccine efficacy rate *ve* is 0.6 or 0.7.
+* Number of bootstrap samples is $10^5$.
+
+```{r WaitTime4}
+x <- sim_waiting_time(30000, 0.01, 150, 0.6, 10^5)
+mean(x < 2.5)
+
+x <- sim_waiting_time(30000, 0.01, 150, 0.7, 10^5)
+mean(x < 2.5)
+```
+
+## Statistical Power
+
+"At 150 confirmed cases, a vaccine with a true efficacy rate of 60 percent has a nine in 10 chance of satisfying the statistical criteria. At only 100 cases, the probability of exceeding the required thresholds declines to three in four. At just 50 cases, the probability is closer to one in two."
+
+* Number of endpoints *n* is 150, 100, or 50.
+* True vaccine efficacy rate *ve* is 0.6.
+* Target vaccine efficacy rate *ve_star* depends on the number of cases. 
+  
+```{r PowerAnalysis1}
+ve <- 0.6
+rr <- 1 - ve
+n <- 150
+ve_star <- 0.5
+rr_star <- 1 - ve_star
+pbinom(rr_star/(1 + rr_star) * n, n, rr/(1 + rr))
+
+ve0 <- 1:99/100
+rr0 <- 1 - ve0
+
+n <- 100
+q <- qbinom(0.975, n, rr0/(1 + rr0))
+ve0_025 <- 1 - q/(n - q)
+ve_star100 <- min(ve0[ve0_025 > 0.3])
+rr_star100 <- 1 - ve_star100
+pbinom(rr_star100/(1 + rr_star100) * n, n, rr/(1 + rr))
+
+n <- 50
+q <- qbinom(0.975, n, rr0/(1 + rr0))
+ve0_025 <- 1 - q/(n - q)
+ve_star50 <- min(ve0[ve0_025 > 0.3])
+rr_star50 <- 1 - ve_star50
+pbinom(rr_star50/(1 + rr_star50) * n, n, rr/(1 + rr))
+```
+
+"Another way of considering this same trade-off is by examining what the true efficacy rate of a vaccine must be to achieve a 90 percent probability of success at various case counts. At 100 confirmed cases, the true vaccine efficacy rate needs to be at least 66 percent, and at just 50 cases, it must be at least 73 percent."
+
+* Number of endpoints *n* is 50 or 100.
+* Potential true vaccine efficacy rates *ve0* range from 0.01 to 0.99.
+* Target vaccine efficacy rate *ve_star* defined previously. 
+
+```{r PowerAnalysis2}
+ve0 <- 1:99/100
+rr <- 1 - ve0
+
+n <- 100
+x <- qbinom(0.9, n, rr/(1 + rr))
+ve90 <- 1 - x/(n - x)
+min(ve0[ve90 > ve_star100])
+
+n <- 50
+x <- qbinom(0.9, n, rr/(1 + rr))
+ve90 <- 1 - x/(n - x)
+min(ve0[ve90 > ve_star50])
+```
+
+"A claim that a candidate vaccine has a three in four chance of satisfying the criteria for regulatory approval in a trial with 150 confirmed cases, for example, is consistent with a claim that the vaccine has a 55 percent expected efficacy rate."
+
+* Number of endpoints *n* is 150.
+* True vaccine efficacy rates *ve* is 0.55
+* Target vaccine efficacy rate *ve_star* is 0.5. 
+ 
+```{r PowerAnalysis3a}
+ve <- 0.55
+rr <- 1 - ve
+n <- 150
+ve_star <- 0.5
+rr_star <- 1 - ve_star
+pbinom(rr_star/(1 + rr_star) * n, n, rr/(1 + rr))
+```
+
+"A claim that a candidate vaccine has an expected efficacy rate of 75 percent is consistent with a belief that the vaccine has less than a one in 20,000 chance of failing to satisfy the statistical criteria in a trial with 150 confirmed cases."
+
+* Number of endpoints *n* is 150.
+* True vaccine efficacy rates *ve* is 0.75
+* Target vaccine efficacy rate *ve_star* is 0.5. 
+
+```{r PowerAnalysis3b}
+ve <- 0.75
+rr <- 1 - ve
+n <- 150
+ve_star <- 0.5
+rr_star <- 1 - ve_star
+(1 - pbinom(rr_star/(1 + rr_star) * n, n, rr/(1 + rr))) * 20000
+```
+
+## Evaluating at intermediate endpoint counts
+
+"A trial for a vaccine with a true efficacy rate of 55 percent that evaluates the vaccine at 50, 100, and 150 positive cases using the WHO-recommended criteria will, on average, require 130 positive cases. More than six times in 10, the trial would continue to its 150-case conclusion."
+
+* Intermediate endpoints at 50 and 100.
+* True vaccine efficacy rates *ve* is 0.55
+* Target vaccine efficacy rate *ve_star* conditional on endpoint defined by WHO.
+  
+```{r intermdediate1}
+ve_hat_eval = function(ve) {
+  rr <- 1 - ve
+  x <- rbinom(100, 1, rr/(1 + rr))
+  ve_hat <- (1 - cumsum(x == 1)/cumsum(x == 0))[c(50, 100)]
+  return(ve_hat)
+}
+
+# WHO criteria
+lwr50 <- -0.14
+upr50 <- 0.76
+lwr100 <- 0.23
+upr100 <- 0.59
+
+x <- replicate(10^5, ve_hat_eval(0.55))
+x.res <- apply(t(x), 1, function(ve) {
+  c1 <- ve[1] > upr50 | ve[1] < lwr50
+  c2 <- ve[2] > upr100 | ve[2] < lwr100
+  return(c(c1, c2))
+})
+p1 <- mean(x.res[1,] == 1)
+p2 <- mean(x.res[2,] == 1 & x.res[1,] == 0)
+p3 <- mean(x.res[2,] == 0 & x.res[1,] == 0)
+50 * p1 + 100 * p2 + 150 * p3
+p3
+
+```
+
+"If the candidate’s true efficacy rate is 75 percent, then just 78 positive cases would be required, on average, to demonstrate its effectiveness, and the trial could end early nearly 99 times out of 100."
+
+* Intermediate endpoints at 50 and 100.
+* True vaccine efficacy rates *ve* is 0.75
+* Target vaccine efficacy rates conditional on endpoint defined by WHO.
+
+```{r intermdediate2}
+ve_hat_eval = function(ve) {
+  rr <- 1 - ve
+  x <- rbinom(150, 1, rr/(1 + rr))
+  ve_hat <- (1 - cumsum(x == 1)/cumsum(x == 0))[c(50, 100, 150)]
+  return(ve_hat)
+}
+
+# WHO criteria
+lwr50 <- -0.14
+upr50 <- 0.76
+lwr100 <- 0.23
+upr100 <- 0.59
+
+x <- replicate(10^5, ve_hat_eval(0.75))
+x.res <- apply(t(x), 1, function(ve) {
+  c1 <- ve[1] > upr50 | ve[1] < lwr50
+  c2 <- ve[2] > upr100 | ve[2] < lwr100
+  return(c(c1, c2))
+})
+p1 <- mean(x.res[1,] == 1)
+p2 <- mean(x.res[2,] == 1 & x.res[1,] == 0)
+p3 <- mean(x.res[2,] == 0 & x.res[1,] == 0)
+50 * p1 + 100 * p2 + 150 * p3
+p1 + p2
+```
+
+## Reproducing Table 5
+
+* Intermediate endpoints at 50 and 100.
+* True vaccine efficacy rates *ve* is 0.5, 0.6, 0.7, and 0.8
+* Target vaccine efficacy rates conditional on endpoint defined by WHO.
+  
+```{r intemediate3}
+ve <- 5:8/10
+
+out <- tibble(ve = ve) %>%
+  mutate(p50 = 0,
+         p100 = 0,
+         p150 = 0)
+
+for (i in 1:dim(out)[1]) {
+  x <- replicate(10^5, ve_hat_eval(out$ve[i]))
+  out$p50[i] <- mean(apply(t(x), 1, function(ve) ve[1] >= upr50))
+  out$p100[i] <- mean(apply(t(x), 1, function(ve) ve[2] >= upr100 & ve[1] < upr50 & ve[1] > lwr50))
+  out$p150[i] <- mean(apply(t(x), 1, function(ve) ve[3] >= 0.5 & ve[2] < upr100 & ve[2] > lwr100 & ve[1] < upr50 & ve[1] > lwr50))
+}
+out
+```
