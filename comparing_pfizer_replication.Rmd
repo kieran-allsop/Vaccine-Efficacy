@@ -1,0 +1,175 @@
+---
+title: "An October vaccine signal is possible but not certain"
+author: "James C. Capretta and Scott Ganz"
+date: "October 2020"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+library(dplyr)
+library(tidyr)
+library(mosaic)
+options(warn = -1)
+set.seed(123456)
+```
+
+## Introduction
+
+This replication file replicates the calculations in the paper **An October vaccine signal is possible but not certain**. The code was originally run on R.4.0.1. Updated versions of R may have been released since this replication file was written.
+
+You will need to install the following packages into R to run this code:
+
+* dplyr
+* tidyr
+* mosaic
+
+The following function **ve_hat_eval** must also be defined. This function takes in a true vaccine efficacy rate (*ve*) and simulates what the observed vaccine efficacy rate would be after various numbers of endpoints.
+
+```{r}
+ve_hat_eval = function(ve) {
+  rr <- 1 - ve
+  x <- rbinom(164, 1, rr/(1 + rr))
+  ve_hat <- (1 - cumsum(x == 1)/cumsum(x == 0))[c(32, 50, 53, 62, 75, 92, 100, 106, 120, 150, 151, 164)]
+  return(ve_hat)
+}
+```
+
+
+## Vaccine Efficacy Bounds
+
+Based on the clinical protocol documents of vaccines currently in Phase III trials, the following vaccine efficacy bounds are defined at a set number of endpoints:
+
+* [WHO Protocol](https://www.who.int/publications/i/item/an-international-randomised-trial-of-candidate-vaccines-against-covid-19)
+* [Pfizer Protocol](https://pfe-pfizercom-d8-prod.s3.amazonaws.com/2020-09/C4591001_Clinical_Protocol_0.pdf)
+
+```{r veBounds}
+# WHO CRITERIA
+who.lwr50 <- -0.14
+who.upr50 <- 0.76
+who.lwr100 <- 0.23
+who.upr100 <- 0.59
+who.bound150 <-0.5 
+# PFIZER CRITERIA
+pfi.lwr32 <- 1-(15/17)
+pfi.upr32 <- 1-(6/26)
+pfi.lwr62 <- 1-(26/36)
+pfi.upr62 <- 1-(15/47)
+pfi.lwr92 <- 1-(35/57)
+pfi.upr92 <- 1-(25/67)
+pfi.upr120 <- 1-(35/85)
+pfi.bound164 <-1-(53/111) 
+```
+
+## Probability of Success Calculations
+
+### Difference between Pfizer and WHO criteria
+
+"If the vaccine’s true efficacy in the entire population were 55 percent, the probability of a successful trial under Pfizer-BioNTech’s protocol is 9 percentage points lower than the probability of success under the WHO’s recommended criteria."
+
+```{r successProb}
+# VE = 55 percent
+x <- replicate(10^5, ve_hat_eval(0.55))
+
+# WHO
+x.res <- apply(t(x), 1, function(ve) {
+    WHOendpoint1 <- ve[2] >= who.upr50 
+    WHOendpoint2 <- ve[7] >= who.upr100 & ve[2] > who.lwr50
+    WHOendpoint3 <- ve[10] >= who.bound150 & ve[2] > who.lwr50 & ve[7] > who.lwr100
+    YES <- ifelse(WHOendpoint1 !=0 | WHOendpoint2 !=0 | WHOendpoint3 !=0, 1, 0)
+    return(mean(YES))
+  })
+  who.success_prob <- mean(x.res)
+  
+# Pfizer
+x.res <- apply(t(x), 1, function(ve) {
+    PFIendpoint1 <- ve[1] >= pfi.upr32
+    PFIendpoint2 <- ve[4] >= pfi.upr62 & ve[1] > pfi.lwr32
+    PFIendpoint3 <- ve[6] >= pfi.upr92 & ve[1] > pfi.lwr32 & ve[4] > pfi.lwr62
+    PFIendpoint4 <- ve[9] >= pfi.upr120 & ve[1] > pfi.lwr32 & ve[4] > pfi.lwr62 & ve[6] > pfi.lwr92
+    PFIendpoint5 <- ve[12] >= pfi.bound164 & ve[1] > pfi.lwr32 & ve[4] > pfi.lwr62 & ve[6] > pfi.lwr92
+    YES <- ifelse(PFIendpoint1 !=0 | PFIendpoint2 !=0 | PFIendpoint3 !=0 | PFIendpoint4 !=0 | PFIendpoint5 !=0, 1, 0)
+    return(mean(YES))
+  })
+  pfi.success_prob <- mean(x.res)
+  
+# Difference in probability of success between Pfizer and WHO
+difference <- pfi.success_prob - who.success_prob
+difference
+```
+
+### Likelihood of 32 cases after 2 months
+
+"With 44,000 trial participants (when fully enrolled), 32 cases of COVID-19 disease would almost certainly emerge before two months, if Pfizer-BioNTech’s assumptions about true vaccine efficacy and the rate at which nonvaccinated trial participants contract the disease are correct."
+
+*Pfizer assume a yearly attack rate (ar) of 1.3% (3-month attack rate of 0.325%). See [Pfizer Protocol](https://pfe-pfizercom-d8-prod.s3.amazonaws.com/2020-09/C4591001_Clinical_Protocol_0.pdf) page 13 for more. In the example below, we assume a true vaccine efficacy rate (ve) of 0.6.* 
+
+```{r waitingTime}
+sim_waiting_time = function(ss, ar, n, ve, nsim) {
+  (sapply(1:nsim, function(x) {
+    X <- sort(c(rexp(ss/2, ar/3), rexp(ss/2, (ar/3) * (1 - ve))))
+    X[X > 0.5][n]
+  }))
+}
+
+x <- sim_waiting_time(44000, 0.00325, 32, 0.6, 10^5)
+prob <- mean(x < 2)
+prob
+```
+
+### Pfizer probability of success after 32 cases
+
+"The odds of a vaccine meeting the Pfizer-BioNTech’s criteria at 32 cases if the actual efficacy of the vaccine is 70 percent is less than 2 in 5.  If the actual efficacy is only 60 percent, the odds drop to 15 in 100."
+
+```{r successProb2}
+# VE = 70 percent
+x <- replicate(10^5, ve_hat_eval(0.7))
+x.res <- apply(t(x), 1, function(ve) {
+    PFIendpoint1 <- ve[1] >= pfi.upr32
+    YES <- ifelse(PFIendpoint1 !=0, 1, 0)
+    return(mean(YES))
+  })
+  pfi.success_prob <- mean(x.res)
+  pfi.success_prob
+
+# VE = 60 percent  
+x <- replicate(10^5, ve_hat_eval(0.6))
+x.res <- apply(t(x), 1, function(ve) {
+    PFIendpoint1 <- ve[1] >= pfi.upr32
+    YES <- ifelse(PFIendpoint1 !=0, 1, 0)
+    return(mean(YES))
+  })
+  pfi.success_prob <- mean(x.res)
+  pfi.success_prob
+```
+
+### Pfizer probability of success after 62 cases and 92 cases
+
+"With more case counts, the odds improve for meeting the efficacy criteria. If the actual efficacy of a vaccine is 70 percent, then the odds of meeting the FDA and WHO criteria at 62 cases is around 2 in 3, and it rises to 9 in 10 at 92 cases."
+
+```{r successProb3}
+x <- replicate(10^5, ve_hat_eval(0.7))
+
+# Odds of success after 62 cases
+x.res <- apply(t(x), 1, function(ve) {
+    PFIendpoint1 <- ve[1] >= pfi.upr32
+    PFIendpoint2 <- ve[4] >= pfi.upr62 & ve[1] > pfi.lwr32
+    YES <- ifelse(PFIendpoint1 !=0 | PFIendpoint2 !=0, 1, 0)
+    return(mean(YES))
+  })
+  pfi.success_prob_62cases <- mean(x.res)
+  pfi.success_prob_62cases
+
+# Odds of success after 92 cases
+x.res <- apply(t(x), 1, function(ve) {
+    PFIendpoint1 <- ve[1] >= pfi.upr32
+    PFIendpoint2 <- ve[4] >= pfi.upr62 & ve[1] > pfi.lwr32
+    PFIendpoint3 <- ve[6] >= pfi.upr92 & ve[1] > pfi.lwr32 & ve[4] > pfi.lwr62
+    YES <- ifelse(PFIendpoint1 !=0 | PFIendpoint2 !=0 | PFIendpoint3 !=0, 1, 0)
+    return(mean(YES))
+  })
+  pfi.success_prob_92cases <- mean(x.res)
+  pfi.success_prob_92cases
+```
+
