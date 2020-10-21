@@ -1,6 +1,6 @@
 # Vaccine-Efficacy
 
-Vaccine-Efficacy contains R code in markdown file sthat replicates all simulations and calculations in the AEI Economic Perspectives paper [Awaiting the signal: Assessing the efficacy of COVID-19 vaccines](https://www.aei.org/research-products/report/awaiting-the-signal-assessing-the-efficacy-of-covid-19-vaccines/) and the article [An October vaccine signal is possible but not certain](https://www.aei.org/articles/an-october-vaccine-signal-is-possible-but-not-certain/) both written by [Jim Capretta](https://www.aei.org/profile/james-c-capretta/) and [Scott Ganz](https://www.aei.org/profile/scott-c-ganz/).
+Vaccine-Efficacy contains R code in markdown files that replicates all simulations and calculations in the AEI Economic Perspectives paper [Awaiting the signal: Assessing the efficacy of COVID-19 vaccines](https://www.aei.org/research-products/report/awaiting-the-signal-assessing-the-efficacy-of-covid-19-vaccines/) and the article [An October vaccine signal is possible but not certain](https://www.aei.org/articles/an-october-vaccine-signal-is-possible-but-not-certain/), both written by [Jim Capretta](https://www.aei.org/profile/james-c-capretta/) and [Scott Ganz](https://www.aei.org/profile/scott-c-ganz/).
 
 ## Overview
 
