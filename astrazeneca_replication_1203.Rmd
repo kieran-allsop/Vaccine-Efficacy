@@ -1,0 +1,65 @@
+---
+title: "The Oxford Vaccine's True Efficacy Remains Uncertain - Simulation"
+author: "Kieran Allsop, James C. Capretta, and Scott Ganz"
+date: "December 2020"
+output: html_document
+---
+
+## Introduction
+
+This replication file runs the statistical model used in the article **The Oxford Vaccine's True Efficacy Remains Uncertain**. The code was originally run on R.4.0.1. Updated versions of R may have been released since this replication file was written.
+
+## Parameters
+
+Firstly, define your parameters. These are the same as given in AstraZeneca's November 23rd 2020 [press release](https://www.astrazeneca.com/media-centre/press-releases/2020/azd1222hlr.html).
+
+```{r params}
+ve <- 0.7    # overall vaccine efficacy
+x1 <- 101    # total cases in placebo
+x2 <- 30     # total cases in vaccinated
+n <- 11636   # total number of placebo participants
+n1 <- 2741   # total number of vaccinated in arm 1
+n2 <- n - n1 # total number of vaccinated in arm 2
+```
+
+## Run Simulation
+
+Next run the model. The number of simulations can be change. It is currently at 10^6 simulations.
+
+```{r model}
+# Create empty data frame to fill
+out <- data.frame(ve1 = numeric(),
+                  ve2 = numeric(),
+                  diff = numeric())
+
+# Run the following simulation 10^6 times
+for (i in 1:10^6) {
+  # Vector of x1 random numbers between 1 and n
+  a1 <- sample(1:n, x1)
+  # Vector of x2 random numbers between 1 and n
+  a2 <- sample(1:n, x2)
+  
+  # Calculate VE rate in first n1 participants
+  ve1 <- 1 - sum(a2 <= n1)/sum(a1 <= n1)
+  # Calculate VE rate in remaining participants
+  ve2 <- 1 - sum(a2 > n1)/sum(a1 > n1)
+  # Store results of rin 'i' in row 'i' of "out"
+  out[i,] <- c(ve1, ve2, ve1 - ve2)
+}
+```
+
+## Obtain Results
+
+Finally, observe the distribution of results for each simulation and then obtain a point estimate '*p*' for the proportion of simulations where the difference in vaccine efficacy rates between the two groups was greater than 28 percentage points.
+
+```{r results}
+# Observe distributions of both VE rates and difference
+hist(out$ve1)
+hist(out$ve2)
+hist(out$diff)
+
+# Calculate proportion of times absolut value of diff is greater than 0.28
+p <- mean(abs(out$diff) >= 0.28)
+p
+```
+
